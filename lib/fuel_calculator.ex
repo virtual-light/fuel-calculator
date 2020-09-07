@@ -20,18 +20,34 @@ defmodule FuelCalculator do
   @doc """
   Run calculations.
 
-  ## Examples
+  ## Example
 
       iex> FuelCalculator.run(28801, [{:launch, 9.807}, {:land, 1.62}, {:launch, 1.62}, {:land, 9.807}])
-      51898
+      {:ok, 51898}
 
+  Note that fight_params should be correct, for instance it can't contain two landings
+  or launches in row or start from landing:
 
+      iex> FuelCalculator.run(28801, [{:land, 9.807}])
+      {:error, "Incorrect flight params"}
+
+      iex> FuelCalculator.run(28801, [{:launch, 9.807}, {:launch, 1.62}, {:land, 9.807}])
+      {:error, "Incorrect flight params"}
+
+      iex> FuelCalculator.run(28801, [{:launch, 9.807}, {:land, 1.62}, {:land, 9.807}])
+      {:error, "Incorrect flight params"}
   """
-  @spec run(pos_integer(), [{:launch | :land, float()}]) :: pos_integer()
-  def run(flight_ship_mass, fight_params) do
-    fight_params
-    |> Enum.reverse()
-    |> Enum.reduce(0, &(&2 + one_direction_fuel_weight(&1, &2 + flight_ship_mass)))
+  @spec run(number(), [{:launch | :land, number()}]) ::
+          {:ok, pos_integer()} | {:error, String.t()}
+  def run(ship_mass, fight_params) do
+    with :ok <- check_fight_params(fight_params) do
+      result =
+        fight_params
+        |> Enum.reverse()
+        |> Enum.reduce(0, &(&2 + one_direction_fuel_weight(&1, &2 + ship_mass)))
+
+      {:ok, result}
+    end
   end
 
   defp one_direction_fuel_weight({:launch, gravity}, flight_ship_mass) do
@@ -54,5 +70,19 @@ defmodule FuelCalculator do
     else
       acc
     end
+  end
+
+  defp check_fight_params(params) do
+    with res when res in [:land, :launch] <- check_fight_directions(params), do: :ok
+  end
+
+  defp check_fight_directions(params) do
+    Enum.reduce_while(params, :launch, fn {direction, _}, expected_direction ->
+      if direction != expected_direction do
+        {:halt, {:error, "Incorrect flight params"}}
+      else
+        {:cont, if(direction == :land, do: :launch, else: :land)}
+      end
+    end)
   end
 end
